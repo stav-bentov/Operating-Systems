@@ -28,7 +28,7 @@ int main(int argc, char const *argv[])
         msg_path=argv[1];
         channel_id=atoi(argv[2]);
 
-        if(channel_id>=0)
+        if(channel_id<=0)
         {
             perror(INVALID_ID_ERROR);
             exit(1);

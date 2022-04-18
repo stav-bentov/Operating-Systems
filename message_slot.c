@@ -120,6 +120,7 @@ static long device_ioctl(struct file *file,
   message *current_msg; /* file's message*/
   message_channel *channel_pointer; /* pointer to a channel- we'll use it to search the channel according to channel id and create it if needed*/
   message_channel *new_channel;
+  int channel_exist,first_exist=0;
 
   if (ioctl_command_id != MSG_SLOT_CHANNEL || ioctl_param <= 0)
   {
@@ -127,7 +128,7 @@ static long device_ioctl(struct file *file,
     return -EINVAL;
   }
 
-  printk(KERN_DEBUG "Channel ID= %d\n", ioctl_param);
+  printk(KERN_DEBUG "Channel ID= %ld\n", ioctl_param);
 
   /* get the message of the file from private data-field where we saved a pointer
   to it and find the channel according to the given id or create one*/
@@ -141,46 +142,66 @@ static long device_ioctl(struct file *file,
 
   channel_pointer = (message_channel*)current_msg->first_channel;
 
-  if(channel_pointer==NULL)
-  {
-    printk(KERN_DEBUG "file descriptor isn't assosiated well (file->private_data is NULL)\n");
-    return -1;
-  }
 
-  if (channel_pointer->id == ioctl_param)
+  /*first- check if no first_channel has been set- (true- then create one and set first and current channel,
+  false- then search for the channel if exist), then search for the channel- if exsit then update current_channel,
+  else- create new channel, add to the end and update current_channel. */
+  if(channel_pointer!=NULL)
   {
-    /* first channel is the right one- else search for it or create it*/
-    current_msg->current_channel = channel_pointer;
-  }
-  else
-  {
-    while (channel_pointer->next_message_channel != NULL)
+    printk(KERN_DEBUG "first exist\n");
+    first_exist=1;
+    if (channel_pointer->id == ioctl_param)
     {
-      channel_pointer = channel_pointer->next_message_channel;
-      /* the channel exists*/
-      if (channel_pointer->id == ioctl_param)
+      printk(KERN_DEBUG "first is the right one\n");
+      /* first channel is the right one- else search for it or create it*/
+      current_msg->current_channel = channel_pointer;
+      channel_exist=1;
+    }
+    else
+    {
+      while (channel_pointer->next_message_channel != NULL)
       {
-        current_msg->current_channel = channel_pointer;
-        break;
+        channel_pointer = channel_pointer->next_message_channel;
+        /* the channel exists*/
+        if (channel_pointer->id == ioctl_param)
+        {
+          printk(KERN_DEBUG "first is not the right one\n");
+          current_msg->current_channel = channel_pointer;
+          channel_exist=1;
+          break;
+        }
       }
     }
-    /* channel isn't exsist- so create it*/
-    if (channel_pointer->next_message_channel == NULL)
+
+    /* need to add the channel with id= ioctl_param*/
+    if(!channel_exist)
     {
+      printk(KERN_DEBUG "create new channel\n");
       new_channel = (message_channel*)kmalloc(sizeof(message_channel), GFP_KERNEL);
       /* failed kmalloc*/
       if (new_channel == NULL)
       {
+        printk(KERN_DEBUG "malloc didnt secseed\n");
         return -1;
       }
       /*else, allocation succeed- fill memory with zero*/
-      memset(new_channel, 0, sizeof(*new_channel));
+      memset(new_channel, 0, sizeof(message_channel));
 
       /* add new channel and update current_channel*/
-      channel_pointer->next_message_channel = new_channel;
+      if(!first_exist)
+      { /*first channel isn't set so the new channel will be it*/
+        channel_pointer=new_channel;
+        printk(KERN_DEBUG "first channel added\n");
+      }
+      else
+      { /*first channel is set- add the new channel with id=ioctl_param to the end of the "channel list"*/
+        channel_pointer->next_message_channel = new_channel;
+        printk(KERN_DEBUG "not first channel added\n");
+      }
       current_msg->current_channel = new_channel;
     }
   }
+  printk(KERN_DEBUG "returned value= %d\n",SUCCESS);
 
   return SUCCESS;
 }

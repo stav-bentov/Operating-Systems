@@ -27,14 +27,15 @@ int main(int argc, char const *argv[])
         channel_id=atoi(argv[2]);
         msg=argv[3];
 
-        if(channel_id>=0)
+        if(channel_id<=0)
         {
             perror(INVALID_ID_ERROR);
             exit(1);
         }
 
         msg_file=open(msg_path,O_RDWR);
-        if(msg_file!=0)
+        /*check*/
+        if(msg_file<0)
         {
             perror(OPEN_FILE_ERROR);
             exit(1);
