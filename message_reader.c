@@ -14,7 +14,7 @@
 #include <string.h>
 #include "message_slot.h"
 
-int main(int argc, char const *argv[])
+int main(int argc, char *argv[])
 {
     int msg_file;
     char *msg_path;
