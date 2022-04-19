@@ -1,13 +1,13 @@
-#define NUM_OF_ARGUMENT_ERROR "ERROR: Number of arguments isn't correct!"
-#define INVALID_ID_ERROR "ERROR: the target channel id isn't a non-negative integer!"
-#define OPEN_FILE_ERROR "ERROR: open the specified message slot device file failed!"
-#define IOCTL_ERROR "ERROR: invoking ioctl() failed!"
-#define READ_ERROR "ERROR: reading failed!"
-#define WRITE_ERROR "ERROR: print message to standard output failed!"
+#define NUM_OF_ARGUMENT_ERROR "ERROR: Number of arguments isn't correct!\n"
+#define INVALID_ID_ERROR "ERROR: the target channel id isn't a non-negative integer!\n"
+#define OPEN_FILE_ERROR "ERROR: open the specified message slot device file failed!\n"
+#define IOCTL_ERROR "ERROR: invoking ioctl() failed!\n"
+#define READ_ERROR "ERROR: reading failed!\n"
+#define WRITE_ERROR "ERROR: print message to standard output failed!\n"
 
 #include <fcntl.h>      /* open */ 
 #include <unistd.h>     /* exit */
-//#include <sys/ioctl.h>  /* ioctl */
+#include <sys/ioctl.h>  /* ioctl */
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -35,7 +35,7 @@ int main(int argc, char const *argv[])
         }
 
         msg_file=open(msg_path,O_RDWR);
-        if(msg_file!=0)
+        if(msg_file<0)
         {
             perror(OPEN_FILE_ERROR);
             exit(1);

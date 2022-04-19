@@ -76,7 +76,7 @@ void test1()
 	msg[12] = '\0';
 	if (strcmp(msg, "Hello World!"))
 	{ print_failure(1); exit(0); }
-
+	close(device0_fd);
 	print_success(1);
 }
 

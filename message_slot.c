@@ -35,6 +35,7 @@ typedef struct message
 {
   message_channel *first_channel;   /* pointer to the first messege channel */
   message_channel *current_channel; /* pointer to the last used messege channel */
+  int first_set;
 } message;
 
 /*============ PARAMETERS ============*/
@@ -42,8 +43,6 @@ typedef struct message
 /* used to prevent concurent access into the same device */
 static int dev_open_flag = 0;
 static struct chardev_info device_info;
-
-static int major; /* device major number */
 
 /* "there can be at most 256 different message slots device files"
 so we'll keep an array that will represent 256 device files, each of them
@@ -88,28 +87,17 @@ static int device_open(struct inode *inode,
       return -1;
     }
     /*else, both allocations succeed- fill memory with zero*/
-    memset(current_msg, 0, sizeof(*current_msg));
-    memset(channel, 0, sizeof(*channel));
+    memset(current_msg, 0, sizeof(message));
+    memset(channel, 0, sizeof(message_channel));
 
     current_msg->first_channel = channel;
+    current_msg->first_set = 0;
+
     device_file_array[minor] = current_msg;
+    //printk("1. check if file->private_data is NULL? %d\n",device_file_array[minor]==NULL);
   }
-
+  //printk("2. check if file->private_data is NULL? %d\n",device_file_array[minor]==NULL);
   file->private_data = (void*)device_file_array[minor]; /* the file now has a pointer to the message slot file*/
-  return SUCCESS;
-}
-
-//---------------------------------------------------------------
-static int device_release(struct inode *inode,
-                          struct file *file)
-{
-  unsigned long flags; // for spinlock
-  printk("Invoking device_release(%p,%p)\n", inode, file);
-
-  // ready for our next caller
-  spin_lock_irqsave(&device_info.lock, flags);
-  --dev_open_flag;
-  spin_unlock_irqrestore(&device_info.lock, flags);
   return SUCCESS;
 }
 
@@ -119,8 +107,12 @@ static long device_ioctl(struct file *file,
 {
   message *current_msg; /* file's message*/
   message_channel *channel_pointer; /* pointer to a channel- we'll use it to search the channel according to channel id and create it if needed*/
-  message_channel *new_channel;
-  int channel_exist,first_exist=0;
+  message_channel *new_channel,*prev_channel;
+  int channel_exist;
+  channel_exist=0; /*channel doesn't exsit*/
+  prev_channel=NULL;
+
+  printk(KERN_DEBUG "in device_ioctl\n");
 
   if (ioctl_command_id != MSG_SLOT_CHANNEL || ioctl_param <= 0)
   {
@@ -142,65 +134,62 @@ static long device_ioctl(struct file *file,
 
   channel_pointer = (message_channel*)current_msg->first_channel;
 
-
-  /*first- check if no first_channel has been set- (true- then create one and set first and current channel,
-  false- then search for the channel if exist), then search for the channel- if exsit then update current_channel,
-  else- create new channel, add to the end and update current_channel. */
-  if(channel_pointer!=NULL)
+  /* first channel has been set- search for the channel with id= octl_param*/
+  if(current_msg->first_set)
   {
-    printk(KERN_DEBUG "first exist\n");
-    first_exist=1;
-    if (channel_pointer->id == ioctl_param)
+    while(channel_pointer!=NULL)
     {
-      printk(KERN_DEBUG "first is the right one\n");
-      /* first channel is the right one- else search for it or create it*/
-      current_msg->current_channel = channel_pointer;
-      channel_exist=1;
+      /*channel exist*/
+      if(channel_pointer->id==ioctl_param)
+      {
+        current_msg->current_channel=channel_pointer;
+        channel_exist=1;
+        break;
+      }
+      prev_channel=channel_pointer;
+      channel_pointer=channel_pointer->next_message_channel;
+      //printk(KERN_DEBUG "check channel pointers (should by 0): %d\n",prev_channel==channel_pointer);
+    }
+  }
+  if(!current_msg->first_set || !channel_exist)
+  {
+    /* create the new channel*/
+    printk(KERN_DEBUG "create new channel\n");
+    new_channel = (message_channel*)kmalloc(sizeof(message_channel), GFP_KERNEL);
+    /* failed kmalloc*/
+    if (new_channel == NULL)
+    {
+      printk(KERN_DEBUG "malloc didnt secseed\n");
+      return -1;
+    }
+
+    /*else, allocation succeed- fill memory with zero*/
+    memset(new_channel, 0, sizeof(message_channel));
+    new_channel->id=ioctl_param;
+
+    /* first channel isn't set- new channel needs to be first channel*/
+    if(!current_msg->first_set)
+    {
+      current_msg->first_channel = new_channel;
+      current_msg->first_set=1;
     }
     else
     {
-      while (channel_pointer->next_message_channel != NULL)
-      {
-        channel_pointer = channel_pointer->next_message_channel;
-        /* the channel exists*/
-        if (channel_pointer->id == ioctl_param)
-        {
-          printk(KERN_DEBUG "first is not the right one\n");
-          current_msg->current_channel = channel_pointer;
-          channel_exist=1;
-          break;
-        }
-      }
+      /* add new channel to the end of the "channel list"*/
+      prev_channel->next_message_channel=new_channel;
     }
-
-    /* need to add the channel with id= ioctl_param*/
-    if(!channel_exist)
-    {
-      printk(KERN_DEBUG "create new channel\n");
-      new_channel = (message_channel*)kmalloc(sizeof(message_channel), GFP_KERNEL);
-      /* failed kmalloc*/
-      if (new_channel == NULL)
-      {
-        printk(KERN_DEBUG "malloc didnt secseed\n");
-        return -1;
-      }
-      /*else, allocation succeed- fill memory with zero*/
-      memset(new_channel, 0, sizeof(message_channel));
-
-      /* add new channel and update current_channel*/
-      if(!first_exist)
-      { /*first channel isn't set so the new channel will be it*/
-        channel_pointer=new_channel;
-        printk(KERN_DEBUG "first channel added\n");
-      }
-      else
-      { /*first channel is set- add the new channel with id=ioctl_param to the end of the "channel list"*/
-        channel_pointer->next_message_channel = new_channel;
-        printk(KERN_DEBUG "not first channel added\n");
-      }
-      current_msg->current_channel = new_channel;
-    }
+    /* add new channel and update current_channel*/
+    current_msg->current_channel = new_channel;
   }
+  /*printk(KERN_DEBUG "check pointer:\n");
+  printk(KERN_DEBUG "new channel= %p:\n",new_channel);
+  printk(KERN_DEBUG "current_msg->current_channel= new channel= %p:\n",current_msg->current_channel);
+  printk(KERN_DEBUG "current_msg->first_channel=%p:\n",current_msg->first_channel);
+  printk(KERN_DEBUG "check (message*)file->private_data:\n");
+  printk(KERN_DEBUG "(message*)file->private_data= %p:\n",(message*)file->private_data);
+  printk(KERN_DEBUG "(message*)file->private_data>current_channel= new channel= %p:\n",((message*)(file->private_data))->current_channel);
+  printk(KERN_DEBUG "(message*)file->private_data->first_channel=%p:\n",((message*)(file->private_data))->first_channel);
+*/
   printk(KERN_DEBUG "returned value= %d\n",SUCCESS);
 
   return SUCCESS;
@@ -216,11 +205,14 @@ static ssize_t device_write(struct file *file,
   char *content_msg; /* pointer that will help in writing the data from buffer to channel */
   int i;
 
-  current_msg = (message*)file->private_data;
+  printk(KERN_DEBUG "in device_write\n");
+
+  current_msg = (message*)(file->private_data);
 
   /* no message has been set to file*/
   if (current_msg == NULL)
   {
+    printk(KERN_DEBUG "current_msg == NULL\n");
     /* The c library interprets this and gives -1 return and set errno to EINVAL*/
     return -EINVAL;
   }
@@ -230,13 +222,17 @@ static ssize_t device_write(struct file *file,
   /* no channel has been set to message*/
   if (channel == NULL)
   {
+    printk(KERN_DEBUG "channel == NULL\n");
     /* The c library interprets this and gives -1 return and set errno to EINVAL*/
     return -EINVAL;
   }
 
+  //printk(KERN_DEBUG "current_msg->current_channel= new channel= %p:\n",current_msg->current_channel);
+
   /* the message's length is 0 or more then 128*/
   if (length == 0 || length > BUFFER_BOUND)
   {
+    //printk(KERN_DEBUG "length == 0 || length > BUFFER_BOUND\n");
     /* The c library interprets this and gives -1 return and set errno to EMSGSIZE*/
     return -EMSGSIZE;
   }
@@ -244,6 +240,7 @@ static ssize_t device_write(struct file *file,
   /* allocate memory to the message content if needed*/
   if (channel->msg == NULL)
   {
+    //printk(KERN_DEBUG "channel->msg == NULL\n");
     channel->msg = (char *)kmalloc(BUFFER_BOUND, GFP_KERNEL);
     /* failed kmalloc*/
     if (channel == NULL)
@@ -253,15 +250,23 @@ static ssize_t device_write(struct file *file,
   }
 
   /* reset prievious message or set up the message in the channel*/
-  memset(channel->msg, 0, sizeof(BUFFER_BOUND));
   content_msg = channel->msg;
+  memset(content_msg, 0, sizeof(BUFFER_BOUND));
 
   channel->msg_length = length;
   /* get the message from buffer and update channel content*/
-  for (i = 0; i < length; ++i)
+  for (i = 0; i < length; i++)
   {
-    get_user(content_msg[i], &buffer[i]);
+    /* get_user returns 0 on success*/
+    if ((get_user(content_msg[i], &buffer[i])) != 0)
+    {
+      /* The c library interprets this and gives -1 return and set errno to EFAULT*/
+      return -1;
+    }
   }
+  /*printk(KERN_DEBUG "is channel_msg==null?= %p:\n",(((message*)(file->private_data))->current_channel)->msg);
+  printk(KERN_DEBUG "current_msg %p:\n",(message*)(file->private_data));
+  printk(KERN_DEBUG "channel->msg == %d\n",channel->msg_length);*/
 
   return length;
 }
@@ -275,6 +280,8 @@ static ssize_t device_read(struct file *file,
   message_channel *channel; /* message's current channel*/
   char *content_msg; /* content that will be written in channel */
   int i;
+
+  printk(KERN_DEBUG "in device_read\n");
 
   current_msg = (message*)file->private_data;
   
@@ -308,14 +315,16 @@ static ssize_t device_read(struct file *file,
     return -ENOSPC;
   }
 
+  content_msg = channel->msg;
+
   /* write current message to the buffer*/
-  for (i = 0; i < channel->msg_length; ++i)
+  for (i = 0; i < channel->msg_length; i++)
   {
     /* put_user returns 0 on success*/
     if ((put_user(content_msg[i], &buffer[i])) != 0)
     {
       /* The c library interprets this and gives -1 return and set errno to EFAULT*/
-      return -ENOSPC;
+      return -1;
     }
   }
 
@@ -333,7 +342,6 @@ struct file_operations Fops =
         .read = device_read,
         .write = device_write,
         .open = device_open,
-        .release = device_release,
         .unlocked_ioctl = device_ioctl,
 };
 
@@ -341,6 +349,9 @@ struct file_operations Fops =
 static int __init simple_init(void)
 {
   int rc = -1;
+
+  printk(KERN_DEBUG "in init\n");
+
   // init dev struct
   memset( &device_info, 0, sizeof(struct chardev_info) );
   spin_lock_init( &device_info.lock );
@@ -371,6 +382,12 @@ static void __exit simple_cleanup(void)
   message_channel *curr_channel;
   message_channel *next_channel;
 
+  printk(KERN_DEBUG "in exit\n");
+
+  // Unregister the device
+  // Should always succeed
+  unregister_chrdev(MAJOR_NUM, DEVICE_RANGE_NAME);
+
   /* pass device_file_array and free used cells*/
   for (i = 0; i < DEVICE_FILE_BOUND; i++)
   {
@@ -398,10 +415,8 @@ static void __exit simple_cleanup(void)
   }
 
   /*****************************************************************************/ 
-
-  // Unregister the device
-  // Should always succeed
-  unregister_chrdev(major, DEVICE_RANGE_NAME);
+  
+  printk("exit module secseed");
 }
 
 //---------------------------------------------------------------
