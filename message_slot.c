@@ -36,7 +36,7 @@ typedef struct message
 /* "there can be at most 256 different message slots device files"
 so we'll keep an array that will represent 256 device files, each of them
 will point to his first channel*/
-static message *device_file_array[DEVICE_FILE_BOUND];
+static message *device_file_array[DEVICE_FILE_BOUND+1];
 
 //================== DEVICE FUNCTIONS ===========================
 static int device_open(struct inode *inode,
@@ -72,8 +72,6 @@ static int device_open(struct inode *inode,
     device_file_array[minor] = current_msg;
     printk(KERN_DEBUG "is device_file_array[minor]==NULL (should be 0)= %d\n",device_file_array[minor] == NULL);
   }
-  file->private_data = (void*)device_file_array[minor]; /* the file now has a pointer to the message slot file*/
-  printk(KERN_DEBUG "is file->private_data==NULL (should be 0)= %d\n",file->private_data == NULL);
   return SUCCESS;
 }
 
@@ -88,6 +86,7 @@ static long device_ioctl(struct file *file,
                          unsigned int ioctl_command_id,
                          unsigned long ioctl_param)
 {
+  int minor;
   message *current_msg; /* file's message*/
   message_channel *channel_pointer; /* pointer to a channel- we'll use it to search the channel according to channel id and create it if needed*/
   message_channel *new_channel,*prev_channel;
@@ -105,6 +104,15 @@ static long device_ioctl(struct file *file,
   }
 
   printk(KERN_DEBUG "Channel ID= %ld\n", ioctl_param);
+
+  
+  if((file->f_inode)==NULL)
+  {
+    return-EINVAL;
+  }
+  
+  minor=iminor(file->f_inode);
+  file->private_data = (void*)device_file_array[minor]; /* the file now has a pointer to the message slot file*/
 
   /* get the message of the file from private data-field where we saved a pointer
   to it and find the channel according to the given id or create one*/
@@ -196,6 +204,12 @@ static ssize_t device_write(struct file *file,
 
   printk(KERN_ALERT "in device_write\n");
 
+  if(file==NULL)
+  {
+    printk(KERN_DEBUG "file==NULL\n");
+    return -EINVAL;
+  }
+  
   current_msg = (message*)(file->private_data);
 
   /* no message has been set to file*/
@@ -272,6 +286,12 @@ static ssize_t device_read(struct file *file,
   int i;
 
   printk(KERN_ALERT "in device_read\n");
+
+  if(file==NULL)
+  {
+    printk(KERN_DEBUG "file==NULL\n");
+    return -EINVAL;
+  }
 
   current_msg = (message*)file->private_data;
   
