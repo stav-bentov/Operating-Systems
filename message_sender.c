@@ -1,8 +1,8 @@
-#define NUM_OF_ARGUMENT_ERROR "ERROR: Number of arguments isn't correct!\n"
-#define INVALID_ID_ERROR "ERROR: the target channel id isn't a non-negative integer!\n"
-#define OPEN_FILE_ERROR "ERROR: open the specified message slot device file failed!\n"
-#define IOCTL_ERROR "ERROR: invoking ioctl() failed!\n"
-#define WRITE_ERROR "ERROR: writing failed!\n"
+#define NUM_OF_ARGUMENT_ERROR "ERROR: Number of arguments isn't correct!"
+#define INVALID_ID_ERROR "ERROR: the target channel id isn't a non-negative integer!"
+#define OPEN_FILE_ERROR "ERROR: open the specified message slot device file failed!"
+#define IOCTL_ERROR "ERROR: invoking ioctl() failed!"
+#define WRITE_ERROR "ERROR: writing failed!"
 
 #include <fcntl.h>      /* open */ 
 #include <unistd.h>     /* exit */
