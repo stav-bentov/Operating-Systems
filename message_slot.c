@@ -62,15 +62,11 @@ static int device_open(struct inode *inode,
       printk(KERN_DEBUG "current_msg == NULL || channel == NULL\n");
       return -1;
     }
-    /*else, both allocations succeed- fill memory with zero*/
-
-    //memset(current_msg, 0, sizeof(message));
-    //memset(channel, 0, sizeof(message_channel));
+    /*else, both allocations succeed*/
     current_msg->first_channel = channel;
     current_msg->first_set = 0;
 
     device_file_array[minor] = current_msg;
-    printk(KERN_DEBUG "is device_file_array[minor]==NULL (should be 0)= %d\n",device_file_array[minor] == NULL);
   }
   return SUCCESS;
 }
@@ -179,15 +175,6 @@ static long device_ioctl(struct file *file,
     /* add new channel and update current_channel*/
     current_msg->current_channel = new_channel;
   }
-  printk(KERN_DEBUG "check pointer:\n");
-  printk(KERN_DEBUG "current_msg->current_channel= new channel= %p:\n",current_msg->current_channel);
-  printk(KERN_DEBUG "current_msg->first_channel=%p:\n",current_msg->first_channel);
-  printk(KERN_DEBUG "check (message*)file->private_data:\n");
-  printk(KERN_DEBUG "(message*)file->private_data= %p:\n",(message*)file->private_data);
-  printk(KERN_DEBUG "(message*)file->private_data>current_channel= new channel= %p:\n",((message*)(file->private_data))->current_channel);
-  printk(KERN_DEBUG "(message*)file->private_data->first_channel=%p:\n",((message*)(file->private_data))->first_channel);
-
-  printk(KERN_DEBUG "returned value= %d\n",SUCCESS);
 
   return SUCCESS;
 }
@@ -267,10 +254,6 @@ static ssize_t device_write(struct file *file,
       return -1;
     }
   }
-  
-  printk(KERN_DEBUG "is channel_msg==null? (should be 0)= %p:\n",(((message*)(file->private_data))->current_channel)->msg);
-  printk(KERN_DEBUG "current_msg %p:\n",(message*)(file->private_data));
-  printk(KERN_DEBUG "channel->msg == %d\n",channel->msg_length);
 
   return length;
 }
@@ -427,8 +410,6 @@ static void __exit simple_cleanup(void)
       kfree(current_msg);
     }
   }
-
-  /*****************************************************************************/ 
   
   printk("exit module secseed");
 }

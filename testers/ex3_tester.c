@@ -10,6 +10,8 @@
 
 static char* DEV0 = "/dev/test0";
 static char* DEV1 = "/dev/test1";
+static char* DEV2 = "/dev/test2";
+static char* DEV3 = "/dev/test3";
 
 void test1();
 void test2();
@@ -25,6 +27,12 @@ void test11();
 void test12();
 void test13();
 void test14();
+void test15();
+void test16();
+void test17();
+void test18();
+void test19();
+void test20();
 void print_failure(int test_num);
 void print_success(int test_num);
 
@@ -45,6 +53,12 @@ int main(void)
 	test12();
 	test13();
 	test14();
+	test15();
+	test16();
+	test17();
+	test18();
+	test19();
+	test20();
 
 	printf("DONE!\n");
 
@@ -431,6 +445,170 @@ void test14()
 	print_success(14);
 }
 
+void test15()
+{
+	int device0_fd;
+	char msg[128];
+	int bytes_written;
+	int bytes_read;
+
+	device0_fd = open(DEV0, O_RDWR);
+	if (device0_fd < 0)
+	{ print_failure(15); exit(0); }
+
+	if (ioctl(device0_fd, MSG_SLOT_CHANNEL, 20) < 0)
+	{ print_failure(15); exit(0); }
+	
+	bytes_written = write(device0_fd, "in20", 4);
+	if (bytes_written < 4)
+	{ print_failure(15); exit(0); }
+	
+	if (ioctl(device0_fd, MSG_SLOT_CHANNEL, 21) < 0)
+	{ print_failure(15); exit(0); }
+	
+	bytes_written = write(device0_fd, "in21w", 5);
+	if (bytes_written < 5)
+	{ print_failure(15); exit(0); }
+	
+	bytes_read = read(device0_fd, msg, 128);
+	if (bytes_read < 5)
+	{ print_failure(15); exit(0); }
+
+	msg[5] = '\0';
+	if (strcmp(msg, "in21w"))
+	{ print_failure(15); exit(0); }
+	
+	close(device0_fd);
+
+	print_success(15);
+}
+
+void test16()
+{
+	int device2_fd;
+	int device3_fd;
+	int bytes_written;
+
+	device2_fd = open(DEV2, O_RDWR);
+	if (device2_fd < 0)
+	{ print_failure(16); exit(0); }
+
+	if (ioctl(device2_fd, MSG_SLOT_CHANNEL, 25) < 0)
+	{ print_failure(16); exit(0); }
+	
+	device3_fd = open(DEV3, O_RDWR);
+	
+	if (device3_fd < 0)
+	{ print_failure(16); exit(0); }
+	
+	bytes_written = write(device3_fd, "in25", 4);
+	if (bytes_written != -1 || errno != EINVAL)
+	{ print_failure(16); exit(0); }
+	
+	close(device2_fd);
+	close(device3_fd);
+
+	print_success(16);
+}
+
+void test17()
+{
+	int device0_fd;
+	char msg[128];
+	int bytes_written;
+	int bytes_read;
+
+	device0_fd = open(DEV0, O_RDWR);
+	if (device0_fd < 0)
+	{ print_failure(17); exit(0); }
+
+	if (ioctl(device0_fd, MSG_SLOT_CHANNEL, 25) < 0)
+	{ print_failure(17); exit(0); }
+	
+	bytes_written = write(device0_fd, "U+000A", 6);
+	if (bytes_written < 6)
+	{ print_failure(17); exit(0); }
+	
+	bytes_read = read(device0_fd, msg, 128);
+	if (bytes_read < 6)
+	{ print_failure(17); exit(0); }
+
+	msg[6] = '\0';
+	if (strcmp(msg, "U+000A"))
+	{ print_failure(17); exit(0); }
+	
+	close(device0_fd);
+
+	print_success(17);
+}
+
+void test18()
+{
+	int device0_fd;
+	char msg[128];
+	int bytes_written;
+	int bytes_read;
+
+	device0_fd = open(DEV0, O_RDWR);
+	if (device0_fd < 0)
+	{ print_failure(18); exit(0); }
+	
+	bytes_written = write(device0_fd, "UUUUUU", 6);
+	if (bytes_written != -1 || errno != EINVAL)
+	{ print_failure(18); exit(0); }
+	
+	close(device0_fd);
+
+	print_success(18);
+}
+
+void test19()
+{
+	int device0_fd;
+	char msg[128];
+	int bytes_written;
+	int bytes_read;
+
+	device0_fd = open(DEV0, O_RDWR);
+	if (device0_fd < 0)
+	{ print_failure(19); exit(0); }
+	
+	bytes_read = read(device0_fd, "abcd", 4);
+    if (bytes_read != -1 || errno != EINVAL)
+    { print_failure(19); exit(0); }
+    
+	close(device0_fd);
+
+	print_success(19);
+}
+
+void test20()
+{
+	int device0_fd;
+	char msg[4];
+	int bytes_written;
+	int bytes_read;
+
+	device0_fd = open(DEV0, O_RDWR);
+	if (device0_fd < 0)
+	{ print_failure(20); exit(0); }
+
+	if (ioctl(device0_fd, MSG_SLOT_CHANNEL, 78) < 0)
+	{ print_failure(20); exit(0); }
+
+	bytes_written = write(device0_fd, "lastOne", 7);
+	if (bytes_written < 7)
+	{ print_failure(20); exit(0); }
+
+	bytes_read = read(device0_fd, msg, 4);
+	
+	if (bytes_read != -1 || errno != ENOSPC)
+	{ print_failure(20); exit(0); }
+
+	close(device0_fd);
+
+	print_success(20);
+}
 void print_success(int test_num)
 {
 	printf("TEST %d: Success\n", test_num);
