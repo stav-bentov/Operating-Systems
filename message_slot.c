@@ -92,9 +92,9 @@ static long device_ioctl(struct file *file,
 
   printk(KERN_ALERT "in device_ioctl\n");
 
-  if (ioctl_command_id != MSG_SLOT_CHANNEL || ioctl_param <= 0)
+  if (ioctl_command_id != MSG_SLOT_CHANNEL || ioctl_param == 0)
   {
-    printk(KERN_DEBUG "ioctl_command_id != MSG_SLOT_CHANNEL || ioctl_param <= 0\n");
+    printk(KERN_DEBUG "ioctl_command_id != MSG_SLOT_CHANNEL || ioctl_param == 0\n");
     /* The c library interprets this and gives -1 return and set errno to EINVAL*/
     return -EINVAL;
   }
@@ -108,18 +108,19 @@ static long device_ioctl(struct file *file,
   }
   
   minor=iminor(file->f_inode);
+
+  if(device_file_array[minor]==NULL)
+  {
+    printk(KERN_DEBUG "file descriptor isn't assosiated well (file->private_data is NULL)\n");
+    return -1;
+  }
+
   file->private_data = (void*)device_file_array[minor]; /* the file now has a pointer to the message slot file*/
 
   /* get the message of the file from private data-field where we saved a pointer
   to it and find the channel according to the given id or create one*/
   current_msg = (message*)(file->private_data);
   printk(KERN_DEBUG "current_msg= %p\n", current_msg);
-
-  if(current_msg==NULL)
-  {
-    printk(KERN_DEBUG "file descriptor isn't assosiated well (file->private_data is NULL)\n");
-    return -1;
-  }
 
   channel_pointer = (message_channel*)(current_msg->first_channel);
   printk(KERN_DEBUG "channel_pointer= %p\n", channel_pointer);
@@ -199,7 +200,7 @@ static ssize_t device_write(struct file *file,
   
   current_msg = (message*)(file->private_data);
 
-  /* no message has been set to file*/
+  /* no message file has been set to file*/
   if (current_msg == NULL)
   {
     printk(KERN_DEBUG "current_msg == NULL\n");
@@ -278,7 +279,7 @@ static ssize_t device_read(struct file *file,
 
   current_msg = (message*)file->private_data;
   
-  /* no message has been set to file*/
+  /* no message file has been set to file*/
   if (current_msg == NULL)
   {
     printk(KERN_DEBUG "current_msg == NULL\n");
