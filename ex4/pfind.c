@@ -90,7 +90,8 @@ void checkHoldingExit();
 
 /* Check if number of K waiting threads and number of threads 
 in hold equal to number of running thread (For thread in waiting mode- one of K waiting)*/ 
-void checkHoldingExit();
+void checkKWaitingExit();
+
 
 int main(int argc, char *argv[])
 {
@@ -286,7 +287,6 @@ int thread_func()
     int numThreadToWait; // if thread got in when queue was empty- it needs to wake after thread number "numThreadToWait" is done
     int isKwaiting; // if thread is one of the K waiting thread for queue to become non-empty
     int BoolWaitedOutside=0; // boolean for if thread is not one of K queue and needs to wait for them to complete
-
 
     waitForAll();
 
