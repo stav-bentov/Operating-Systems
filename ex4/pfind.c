@@ -7,8 +7,10 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 #define MAIN_ERROR_ARGC "Error in MAIN: Invalid number of arguments\n"
+#define MAIN_ERROR_OPENDIR "Error in MAIN: Error in opendir()\n"
 #define MAIN_ERROR_ARGV "Error in MAIN: Directory given can't be searched\n"
 #define MAIN_ERROR_MALLOC "Error in MAIN: Failed malloc\n"
 #define MAIN_ERROR_THREAD "Error in MAIN: Failed creating thread\n"
@@ -16,6 +18,7 @@
 #define MAIN_ERROR_CND "Error in MAIN: Failed Initializing a contidtion\n"
 #define MAIN_ERROR_JOIN "Error in MAIN: Failed joining threads\n"
 #define THREAD_ERROR_MALLOC "Error in THREAD: Failed malloc\n"
+#define THREAD_ERROR_OPENDIR "Error in THREAD: Failed opendir()\n"
 
 /* an element in queue- in our case it's a directory*/
 typedef struct Element
@@ -121,10 +124,18 @@ int main(int argc, char *argv[])
 
     /* Check if the directory specified in argv[1] can be searched */
     open_dir = opendir(head_dir);
-    if (open_dir == NULL)
-    {
-        printf("Directory %s: Permission denied.\n",head_dir);
-        exit(1);
+    if(open_dir==NULL)
+    { 
+        if(errno!=EACCES)
+        {// in case of an error in opendir
+            fprintf(stderr,MAIN_ERROR_OPENDIR);
+            exit(1);
+        }
+        else
+        {// can't happend here
+            printf("Directory %s: Permission denied.\n", head_dir);
+            exit(1);
+        }
     }
 
     /* Create a FIFO queue that holds directories */
@@ -369,17 +380,20 @@ int thread_func()
         }
         
         // wake up K waiting
-        //if(numOfWaitingThreads>0)
-        //{
         cnd_broadcast(&updateWaiting);
-        //}
-        /*cnd_broadcast(&updateWaiting);
-        cnd_broadcast(&isQueueEmpty);*/
 
         mtx_unlock(&main_mutex);
 
         head_open = opendir(head_path);// should be able to read
-
+        if(head_open==NULL)
+        { 
+            if(errno!=EACCES)
+            {// in case of an error in opendir
+                errorThread=1;
+                fprintf(stderr,THREAD_ERROR_OPENDIR);
+                KillThread();
+            }
+        }
         /* head_path is a searchable directory*/
         /* https://stackoverflow.com/questions/60535786/stat-using-s-isdir-dont-seem-to-always-work */
         /* iterate through each directory entry (dirent) in the directory obtained from the queue*/
@@ -416,10 +430,19 @@ int thread_func()
                 {
                     // check if dir is searchable
                     searchable_dir = opendir(entry_path);
-                    if (searchable_dir == NULL)
-                    {
-                        printf("Directory %s: Permission denied.\n", entry_path);
-                        continue;
+                    if(searchable_dir==NULL)
+                    { 
+                        if(errno!=EACCES)
+                        {// in case of an error in opendir
+                            errorThread=1;
+                            fprintf(stderr,THREAD_ERROR_OPENDIR);
+                            KillThread();
+                        }
+                        else
+                        {// can't happend here
+                            printf("Directory %s: Permission denied.\n", entry_path);
+                            continue;
+                        }
                     }
                     else
                     {
