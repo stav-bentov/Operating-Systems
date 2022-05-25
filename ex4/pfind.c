@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <stdatomic.h>
 
 #define MAIN_ERROR_ARGC "Error in MAIN: Invalid number of arguments\n"
 #define MAIN_ERROR_OPENDIR "Error in MAIN: Error in opendir()\n"
@@ -54,10 +55,10 @@ int numOfWaitingThreads=0; // Number of waiting threads- waiting for a non-empty
 char *term; // The value in argv[2]
 
 // Boolean parameter- if an error occured in one of the thread- set 1.
-int errorThread = 0; 
+atomic_int errorThread = 0; 
 
 // Number of files that were found under the given terms.
-int numMatchedFiles=0; 
+atomic_int numMatchedFiles=0; 
 
 /* counter for the number of threads done thier part after waked up- 
  make the right thread wake up at his time (right after the thread that entered before him).*/
@@ -105,7 +106,6 @@ void checkHoldingExit();
 /* Check if number of K waiting threads and number of threads 
 in hold equal to number of running thread (For thread in waiting mode- one of K waiting)*/ 
 void checkKWaitingExit();
-
 
 int main(int argc, char *argv[])
 {
@@ -219,12 +219,8 @@ int main(int argc, char *argv[])
     mtx_destroy(&main_mutex);
 
     printf("Done searching, found %d files\n", numMatchedFiles);
-    if (!errorThread)
-    {
-        // no thread has encouterd an error
-        exit(0);
-    }
-    exit(1);
+    
+    exit(errorThread);
 }
 
 void waitForAll()
@@ -284,7 +280,6 @@ void checkKWaitingExit()
         cnd_broadcast(&isQueueEmpty);
     }
 }
-
 
 int thread_func()
 {
@@ -477,16 +472,15 @@ int thread_func()
                 if (check_term != NULL)
                 {
                     printf("%s\n",entry_path);
-                    mtx_lock(&update_match);
+                    //mtx_lock(&update_match);
                     numMatchedFiles++;
-                    mtx_unlock(&update_match);
+                    //mtx_unlock(&update_match);
                 }
             }
         }  
         closedir(head_open);
     }
 }
-
 
 char* removeElemFromQ()
 {
@@ -498,7 +492,6 @@ char* removeElemFromQ()
     }
     return quickRemove();
 }
-
 
 char* quickRemove()
 {
