@@ -21,60 +21,11 @@
 #define THREAD_ERROR_MALLOC "Error in THREAD: Failed malloc\n"
 #define THREAD_ERROR_OPENDIR "Error in THREAD: Failed opendir()\n"
 
-// An element in queue- in our case it's a directory.
-typedef struct Element
-{
-    char *dir_name; // directory's name.
-    struct Element *next;// pointer to next element in queue (next directory).
-
-} DIR_element;
-
-typedef struct Queue
-{
-    int size;
-    struct Element *first; // pointer to first element in queue (first directory).
-    struct Element *last;  // pointer to last element in queue (last directory).
-
-} DIR_queue;
-
-DIR_queue *dir_queue;
-
-mtx_t main_mutex; // Lock mutex if a thread handling queue.
-mtx_t allThreadsMutex; // Lock mutex until all threads created.
-mtx_t update_match; // Lock mutex if a thread handling queue.
-
-/* We have 3 condition that need to be checked*/
-cnd_t allThreadsCreated; // The main thread use it to signal that the searching should start (all searching threads has been created).
-cnd_t threadCreated;     // Use it to signal that a thread was created.
-cnd_t isQueueEmpty;      // if the queue is empty or added a directory.
-cnd_t updateWaiting;      // If a waiting thread done it's job
-
-int numOfThreads; // Number of thread that should be created- given in argv[3].
-int numOfRunningThreads=0;// Updated when any thread that is created or destroyed.
-int numOfWaitingThreads=0; // Number of waiting threads- waiting for a non-empty queue or for other threrads (or waiting to be exited).
-char *term; // The value in argv[2]
-
-// Boolean parameter- if an error occured in one of the thread- set 1.
-atomic_int errorThread = 0; 
-
-// Number of files that were found under the given terms.
-atomic_int numMatchedFiles=0; 
-
-/* counter for the number of threads done thier part after waked up- 
- make the right thread wake up at his time (right after the thread that entered before him).*/
-int numOfthreadDoneWaiting=0;
-
-// counter for numbre of threads waiting for queue to become non-empty.
-int counterWaiting=0;
-
-// Boolean parameter- When queue becomes non-empty after it was- the threads that waited for queue to become non-empty.
-int isWaitingNowRunning=0;
-
-// when first thread is waiting for queue to become non-empty it's value will be 1, when all waiting thread done their run -0 again.
-int anyOnhold=0;
-
-// Number of threads waiting for K threads (that were sleeping because of empty queue) to finish their run.
-int numberOfThreadsHolding=0;
+#define ERROR_INT -1
+#define PERMISSION_INT 1
+#define SEARCHBLE_INT 0
+#define ERROR 1
+#define SUCCESES 0
 
 /*-------------------Declarations-------------------*/
 
@@ -82,10 +33,10 @@ int numberOfThreadsHolding=0;
 void createMutexCnd();
 
 /* Removes first element from queue, copy it's directory name to a given address. returns 1 if an error occured,0- else*/
-char* removeElemFromQ();
+char* dequeueDir();
 
 /* Inserts new element to the end of the queue. return 1 if error occured (can only be failed malloc) 0 if succeed*/
-int insertElemToQ(char* dir_name);
+int enqueueDir(char* dir_path);
 
 /* Handling error in thread- print and exit thread*/
 void KillThread();
@@ -93,7 +44,10 @@ void KillThread();
 /* Actions of a searching thread*/
 int thread_func();
 
-/* the main action of removing element*/
+/* Searching in a given directory for mathcing files or new directories to add to dir_queue*/ 
+void thread_search(char *head_path);
+
+/* The main action of removing element*/
 char* quickRemove();
 
 /* Make all threads wait for wach other to be created- after it all threads can run*/
@@ -107,19 +61,83 @@ void checkHoldingExit();
 in hold equal to number of running thread (For thread in waiting mode- one of K waiting)*/ 
 void checkKWaitingExit();
 
+/* given a directory's path- check if it is searchable, in case of an error- return ERROR_INT*/
+int isSearchble(char* dir);
+
+// An element in queue- in our case it's a directory.
+typedef struct Element
+{
+    char *dir_path; // Directory's name.
+    struct Element *next;// Pointer to next element in queue (next directory).
+
+} DIR_element;
+
+typedef struct Queue
+{
+    int size;
+    struct Element *first; // Pointer to first element in queue (first directory).
+    struct Element *last;  // Pointer to last element in queue (last directory).
+
+} DIR_queue;
+
+DIR_queue *dir_queue;
+
+// Lock mutex if a thread handling queue.
+mtx_t main_mutex; 
+// Lock mutex until all threads created.
+mtx_t allThreadsMutex; 
+
+// The main thread use it to signal that the searching should start (all searching threads has been created).
+cnd_t allThreadsCreated; 
+// Use it to signal that a thread was created.
+cnd_t threadCreated;    
+// If the queue is empty or added a directory. 
+cnd_t isQueueEmpty;     
+// If a waiting thread done it's job 
+cnd_t updateWaiting;      
+
+// Number of thread that should be created- given in argv[3].
+int numOfThreads; 
+// Updated when any thread that is created or destroyed.
+int numOfRunningThreads=0;
+// Number of waiting threads- waiting for a non-empty queue or for other threrads (or waiting to be exited).
+int numOfWaitingThreads=0; 
+// The value in argv[2]
+char *term; 
+
+// Boolean parameter- if an error occured in one of the thread- set 1.
+atomic_int errorThread = 0; 
+
+// Number of files that were found under the given terms.
+atomic_int numMatchedFiles=0; 
+
+/* Counter for the number of threads done thier part after waked up- 
+ make the right thread wake up at his time (right after the thread that entered before him).*/
+int numOfthreadDoneWaiting=0;
+
+// Counter for numbre of threads waiting for queue to become non-empty.
+int counterWaiting=0;
+
+// Boolean parameter- When queue becomes non-empty after it was- the threads that waited for queue to become non-empty.
+int isWaitingNowRunning=0;
+
+// When first thread is waiting for queue to become non-empty it's value will be 1, when all waiting thread done their run -0 again.
+int anyOnhold=0;
+
+// Number of threads waiting for K threads (that were sleeping because of empty queue) to finish their run.
+int numberOfThreadsHolding=0;
+
 int main(int argc, char *argv[])
 {
     int return_value;
     int i;
     thrd_t *thread_ids;
-    DIR_element *head;
-    DIR *open_dir;
     
     /*Validate that the correct number of command line arguments is passed*/
     if (argc != 4)
     {
         fprintf(stderr, MAIN_ERROR_ARGC);
-        exit(1);
+        exit(ERROR);
     }
     // Initialize values
     term =argv[2];
@@ -131,24 +149,24 @@ int main(int argc, char *argv[])
     if(head_dir==NULL)
     {
         fprintf(stderr, MAIN_ERROR_MALLOC);
-        exit(1);
+        exit(ERROR);
     }
     // check if its return ERROR on NULL in argv[1]
     strcpy(head_dir,argv[1]);
 
     /* Check if the directory specified in argv[1] can be searched */
-    open_dir = opendir(head_dir);
-    if(open_dir==NULL)
-    { 
-        if(errno!=EACCES)
-        {// in case of an error in opendir
-            fprintf(stderr,MAIN_ERROR_OPENDIR);
-            exit(1);
+    return_value=isSearchble(head_dir);
+    if(return_value!=SEARCHBLE_INT)
+    { // Error or permission denied
+        if(return_value==ERROR_INT)
+        {
+            fprintf(stderr, MAIN_ERROR_OPENDIR);
+            exit(ERROR);
         }
         else
-        {// can't happend here
-            printf("Directory %s: Permission denied.\n", head_dir);
-            exit(1);
+        {
+            fprintf(stderr, MAIN_ERROR_ARGV);
+            exit(ERROR);
         }
     }
 
@@ -157,29 +175,26 @@ int main(int argc, char *argv[])
     if (dir_queue == NULL)
     {
         fprintf(stderr, MAIN_ERROR_MALLOC);
-        exit(1);
+        exit(ERROR);
     }
+    dir_queue->first=NULL;
+    dir_queue->last=NULL;
+    dir_queue->size=0;
 
     /* Put the search root directory in the queue*/
-    head=(DIR_element*)malloc(sizeof(DIR_element));
-    if (head == NULL)
+    return_value=enqueueDir(head_dir);
+    if (return_value==ERROR)
     {
         fprintf(stderr, MAIN_ERROR_MALLOC);
-        exit(1);
+        exit(ERROR);
     }
-    head->dir_name=head_dir;
-    head->next=NULL;
-    
-    dir_queue->first=head;
-    dir_queue->last=head;
-    dir_queue->size=1;
 
     /* Create n(=argv[3]) searching threads */
     thread_ids =malloc(numOfThreads * sizeof(thrd_t));
     if (thread_ids == NULL)
     {
         fprintf(stderr, MAIN_ERROR_MALLOC);
-        exit(1);
+        exit(ERROR);
     }
     for (i = 0; i < numOfThreads; i++)
     {
@@ -187,7 +202,7 @@ int main(int argc, char *argv[])
         if (return_value != thrd_success)
         {
             fprintf(stderr, MAIN_ERROR_THREAD);
-            exit(1);
+            exit(ERROR);
         }
     }
 
@@ -211,86 +226,18 @@ int main(int argc, char *argv[])
         if (return_value != thrd_success)
         {
             fprintf(stderr, MAIN_ERROR_JOIN);
-            exit(1);
+            exit(ERROR);
         }
     }
-    closedir(open_dir);
 
     mtx_destroy(&main_mutex);
-
     printf("Done searching, found %d files\n", numMatchedFiles);
-    
     exit(errorThread);
 }
 
-void waitForAll()
-{
-    // waits untill all threads are created. update main that a thread was creating by update num of created threads and send a signal
-    mtx_lock(&main_mutex);
-    // this thread in now running
-    numOfRunningThreads++;
-    // this thren has been created- update main
-    cnd_signal(&threadCreated);
-    // wait for all thread to be created
-    cnd_wait(&allThreadsCreated, &main_mutex);
-    mtx_unlock(&main_mutex);
-}
-
-void checkHoldingExit()
-{
-    if(dir_queue->first==NULL)
-    {
-        if(numOfWaitingThreads+numberOfThreadsHolding==numOfRunningThreads)
-        {
-            numOfRunningThreads--;
-            // current thread is a in "numberOfThreadsHolding" count
-            numberOfThreadsHolding--;
-            mtx_unlock(&main_mutex);
-            cnd_broadcast(&updateWaiting);
-            cnd_broadcast(&isQueueEmpty);
-            thrd_exit(1);
-        }
-    }
-    else
-    {
-        cnd_broadcast(&updateWaiting);
-        cnd_broadcast(&isQueueEmpty);
-    }
-    
-}
-
-void checkKWaitingExit()
-{
-    if(dir_queue->first==NULL)
-    {
-        if(numOfWaitingThreads+numberOfThreadsHolding==numOfRunningThreads)
-        {
-            numOfRunningThreads--;
-            // current thread is a in "numOfWaitingThreads" count
-            numOfWaitingThreads--;
-            mtx_unlock(&main_mutex);
-            cnd_broadcast(&updateWaiting);
-            cnd_broadcast(&isQueueEmpty);
-            thrd_exit(1);
-        }
-    }
-    else
-    {
-        cnd_broadcast(&updateWaiting);
-        cnd_broadcast(&isQueueEmpty);
-    }
-}
 
 int thread_func()
 {
-    int return_value;
-    DIR *head_open; // for open head of queue directory
-    char *entry_path; //saves path of a directory that will be added to queue
-    DIR *searchable_dir; // check if current entry is a searchable directory
-    char *check_term;
-    struct dirent *entry;
-    struct stat filestat;
-
     int qWasEmpty=0; // if thread got in when queue was empty
     int numThreadToWait; // if thread got in when queue was empty- it needs to wake after thread number "numThreadToWait" is done
     int isKwaiting; // if thread is one of the K waiting thread for queue to become non-empty
@@ -370,8 +317,9 @@ int thread_func()
                 counterWaiting++;
             }
         }
-        char* head_path=removeElemFromQ();
-        // if thread was one of the K waiting
+        char* head_path=dequeueDir();
+
+        // If thread was one of the K waiting
         if(qWasEmpty || isKwaiting)
         { // update number of waiting threads
             numOfWaitingThreads--;
@@ -389,100 +337,182 @@ int thread_func()
         
         // wake up K waiting
         cnd_broadcast(&updateWaiting);
-
         mtx_unlock(&main_mutex);
 
-        head_open = opendir(head_path);// should be able to read
-        if(head_open==NULL)
-        { 
-            if(errno!=EACCES)
-            {// in case of an error in opendir
-                errorThread=1;
-                fprintf(stderr,THREAD_ERROR_OPENDIR);
-                KillThread();
-            }
-        }
-        /* head_path is a searchable directory*/
-        /* https://stackoverflow.com/questions/60535786/stat-using-s-isdir-dont-seem-to-always-work */
-        /* iterate through each directory entry (dirent) in the directory obtained from the queue*/
-        while ((entry = readdir(head_open)) != NULL)
-        {
-            entry_path = (char*)malloc(PATH_MAX * sizeof(char));
-            if (entry_path == NULL)
-            {
-                errorThread=1;
-                fprintf(stderr,THREAD_ERROR_MALLOC);
-                KillThread();
-            }
-
-            //build full path
-            strcpy(entry_path, head_path);
-            strcat(entry_path, "/");
-            strcat(entry_path, entry->d_name);
-
-            if(stat(entry_path,&filestat)==-1)
-            {
-                errorThread=1;
-                fprintf(stderr,THREAD_ERROR_MALLOC);
-                KillThread();
-            }
-
-            if(S_ISDIR(filestat.st_mode))
-            {// entry is a DIR
-                if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 )
-                {
-                    //free(entry_path);
-                    continue;
-                }
-                else
-                {
-                    // check if dir is searchable
-                    searchable_dir = opendir(entry_path);
-                    if(searchable_dir==NULL)
-                    { 
-                        if(errno!=EACCES)
-                        {// in case of an error in opendir
-                            errorThread=1;
-                            fprintf(stderr,THREAD_ERROR_OPENDIR);
-                            KillThread();
-                        }
-                        else
-                        {// can't happend here
-                            printf("Directory %s: Permission denied.\n", entry_path);
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        // insert new directory path
-                        return_value = insertElemToQ(entry_path);
-                        if (return_value==1)
-                        {
-                            errorThread=1;
-                            fprintf(stderr,THREAD_ERROR_MALLOC);
-                            KillThread();
-                        }
-                    }
-                    closedir(searchable_dir);
-                }
-            } 
-            else 
-            {// entry is a file- check the term
-                check_term = strstr(entry->d_name, term);
-                if (check_term != NULL)
-                {
-                    printf("%s\n",entry_path);
-                    //mtx_lock(&update_match);
-                    numMatchedFiles++;
-                    //mtx_unlock(&update_match);
-                }
-            }
-        }  
-        closedir(head_open);
+        thread_search(head_path);
     }
 }
 
-char* removeElemFromQ()
+void thread_search(char *head_path)
+{
+    int return_value;
+    DIR *head_open; // for open head of queue directory
+    char *entry_path; //saves path of a directory that will be added to queue
+    struct dirent *entry;
+    char *check_term;
+    struct stat filestat;
+
+    head_open = opendir(head_path);// Should be able to read
+    if(head_open==NULL)
+    { 
+        if(errno!=EACCES)
+        {// in case of an error in opendir
+            errorThread=1;
+            fprintf(stderr,THREAD_ERROR_OPENDIR);
+            KillThread();
+        }
+    }
+    /* head_path is a searchable directory*/
+    /* https://stackoverflow.com/questions/60535786/stat-using-s-isdir-dont-seem-to-always-work */
+    /* iterate through each directory entry (dirent) in the directory obtained from the queue*/
+    while ((entry = readdir(head_open)) != NULL)
+    {
+        entry_path = (char*)malloc(PATH_MAX * sizeof(char));
+        if (entry_path == NULL)
+        {
+            errorThread=1;
+            fprintf(stderr,THREAD_ERROR_MALLOC);
+            KillThread();
+        }
+
+        //build full path
+        strcpy(entry_path, head_path);
+        strcat(entry_path, "/");
+        strcat(entry_path, entry->d_name);
+
+        if(stat(entry_path,&filestat)==-1)
+        {
+            errorThread=1;
+            fprintf(stderr,THREAD_ERROR_MALLOC);
+            KillThread();
+        }
+
+        // Check entry's type
+        if(S_ISDIR(filestat.st_mode))
+        {// entry is a DIR
+            if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 )
+            {
+                continue;
+            }
+            else
+            {
+                // check if dir is searchable
+                return_value=isSearchble(entry_path);
+                if(return_value!=SEARCHBLE_INT)
+                { // Error or permission denied
+                    if(return_value==ERROR_INT)
+                    {// in case of an error in opendir
+                        errorThread=1;
+                        fprintf(stderr,THREAD_ERROR_OPENDIR);
+                        KillThread();
+                    }
+                    else
+                    {
+                        printf("Directory %s: Permission denied.\n", entry_path);
+                        continue;
+                    }
+                }
+                // insert new directory path
+                return_value = enqueueDir(entry_path);
+                if (return_value==ERROR)
+                {
+                    errorThread=1;
+                    fprintf(stderr,THREAD_ERROR_MALLOC);
+                    KillThread();
+                }
+            }
+        } 
+        else 
+        {// entry is a file- check the term
+            check_term = strstr(entry->d_name, term);
+            if (check_term != NULL)
+            {
+                printf("%s\n",entry_path);
+                numMatchedFiles++;
+            }
+        }
+    }  
+    closedir(head_open);
+}
+
+int isSearchble(char* dir)
+{
+    DIR *open_dir;
+    open_dir = opendir(dir);
+    if(open_dir==NULL)
+    { 
+        if(errno!=EACCES)
+        {// in case of an error in opendir
+            return ERROR_INT;
+        }
+        else
+        {// can't happend here
+            return PERMISSION_INT;
+        }
+    }
+    closedir(open_dir);
+    return SEARCHBLE_INT;
+}
+
+void waitForAll()
+{
+    // waits untill all threads are created. update main that a thread was creating by update num of created threads and send a signal
+    mtx_lock(&main_mutex);
+    // this thread in now running
+    numOfRunningThreads++;
+    // this thren has been created- update main
+    cnd_signal(&threadCreated);
+    // wait for all thread to be created
+    cnd_wait(&allThreadsCreated, &main_mutex);
+    mtx_unlock(&main_mutex);
+}
+
+void checkHoldingExit()
+{
+    if(dir_queue->first==NULL)
+    {
+        if(numOfWaitingThreads+numberOfThreadsHolding==numOfRunningThreads)
+        {
+            numOfRunningThreads--;
+            // current thread is a in "numberOfThreadsHolding" count
+            numberOfThreadsHolding--;
+            mtx_unlock(&main_mutex);
+            cnd_broadcast(&updateWaiting);
+            cnd_broadcast(&isQueueEmpty);
+            thrd_exit(SUCCESES);
+        }
+    }
+    else
+    {
+        cnd_broadcast(&updateWaiting);
+        cnd_broadcast(&isQueueEmpty);
+    }
+    
+}
+
+void checkKWaitingExit()
+{
+    if(dir_queue->first==NULL)
+    {
+        if(numOfWaitingThreads+numberOfThreadsHolding==numOfRunningThreads)
+        {
+            numOfRunningThreads--;
+            // current thread is a in "numOfWaitingThreads" count
+            numOfWaitingThreads--;
+            mtx_unlock(&main_mutex);
+            cnd_broadcast(&updateWaiting);
+            cnd_broadcast(&isQueueEmpty);
+            thrd_exit(SUCCESES);
+        }
+    }
+    else
+    {
+        cnd_broadcast(&updateWaiting);
+        cnd_broadcast(&isQueueEmpty);
+    }
+}
+
+char* dequeueDir()
 {
     while(dir_queue->first == NULL)
     {
@@ -498,7 +528,7 @@ char* quickRemove()
     DIR_element *rem_first;
     // dir_queue-> size!=0
     rem_first = dir_queue->first;
-    char* dir_name= rem_first->dir_name;
+    char* dir_path= rem_first->dir_path;
     if(rem_first->next!=NULL)
     {
         dir_queue->first = rem_first->next;
@@ -510,67 +540,62 @@ char* quickRemove()
     }
     dir_queue->size = dir_queue->size - 1;
     free(rem_first);
-    return dir_name;
+    return dir_path;
 }
 
 void createMutexCnd()
 {
     int return_value;
     /* Initialize mutex and condition variable objects */
-    return_value = mtx_init(&main_mutex,mtx_plain); // MIGHT NEED TO CHANGE mtx_plain
+    return_value = mtx_init(&main_mutex,mtx_plain);
     if (return_value != thrd_success)
     {
         fprintf(stderr, MAIN_ERROR_MTX);
-        exit(1);
+        exit(ERROR);
     }
-    return_value = mtx_init(&allThreadsMutex,mtx_plain); // MIGHT NEED TO CHANGE mtx_plain
+    return_value = mtx_init(&allThreadsMutex,mtx_plain);
     if (return_value != thrd_success)
     {
         fprintf(stderr, MAIN_ERROR_MTX);
-        exit(1);
+        exit(ERROR);
     }
-    return_value = mtx_init(&update_match,mtx_plain); // MIGHT NEED TO CHANGE mtx_plain
-    if (return_value != thrd_success)
-    {
-        fprintf(stderr, MAIN_ERROR_MTX);
-        exit(1);
-    }
+
     return_value = cnd_init(&allThreadsCreated);
     if (return_value != thrd_success)
     {
         fprintf(stderr, MAIN_ERROR_CND);
-        exit(1);
+        exit(ERROR);
     }
     return_value = cnd_init(&threadCreated);
     if (return_value != thrd_success)
     {
         fprintf(stderr, MAIN_ERROR_CND);
-        exit(1);
+        exit(ERROR);
     }
     return_value = cnd_init(&isQueueEmpty);
     if (return_value != thrd_success)
     {
         fprintf(stderr, MAIN_ERROR_CND);
-        exit(1);
+        exit(ERROR);
     }
     return_value = cnd_init(&updateWaiting);
     if (return_value != thrd_success)
     {
         fprintf(stderr, MAIN_ERROR_CND);
-        exit(1);
+        exit(ERROR);
     }
 }
     
-int insertElemToQ(char* dir_name)
+int enqueueDir(char* dir_path)
 {
     DIR_element *dir_obj;
     dir_obj = (DIR_element*)malloc(sizeof(DIR_element));
     // malloc failed
     if (dir_obj == NULL)
     {
-        return 1;
+        return ERROR;
     }
-    dir_obj->dir_name=dir_name;
+    dir_obj->dir_path=dir_path;
     dir_obj->next=NULL;
     mtx_lock(&main_mutex);
     // check if can be replaced with one of them!!!!!!!!!!!!!!!
@@ -605,7 +630,7 @@ int insertElemToQ(char* dir_name)
     }
     mtx_unlock(&main_mutex);
     cnd_broadcast(&isQueueEmpty);
-    return 0;
+    return SUCCESES;
 }
 
 void KillThread()
@@ -615,5 +640,5 @@ void KillThread()
     mtx_unlock(&main_mutex);
     cnd_broadcast(&isQueueEmpty);
     cnd_broadcast(&updateWaiting);
-    thrd_exit(1);
+    thrd_exit(ERROR);
 }
