@@ -43,7 +43,7 @@ uint64_t pcc_total[UPPER_B_PRINTABLE - LOWER_B_PRINTABLE + 1];//Will count how m
 int connection_error=0; // TCP errors or unexpected connection close- connection_error=1
 int SIGINT_mood=0;
 int client_procced=0; //0 - no client is being procceed, 1- a client is beeing procceed
-atomic int connfd=-1;// when the server is proccesing a client connfd=accept(), else- connfd=-1 (in case of an error too)
+atomic_int connfd=-1;// when the server is proccesing a client connfd=accept(), else- connfd=-1 (in case of an error too)
 
 /* passing a condition of an error in bool- if true it's an error- print it and exit(1)*/
 void error_occured_exit(int bool, char *error_msg);
