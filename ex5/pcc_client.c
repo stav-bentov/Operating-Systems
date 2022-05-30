@@ -35,9 +35,6 @@ void write_size_to_server(uint64_t file_size, int sockfd);
 /* Read C that was sent from server*/
 void read_from_server(int sockfd);
 
-/* given an uint64_t convert it from Big-Endian to Little-Endian (and vice versa) */
-uint64_t endianness_swap(uint64_t val);
-
 int main(int argc, char *argv[])
 {
     int return_value;
@@ -90,7 +87,7 @@ int main(int argc, char *argv[])
 void write_size_to_server(uint64_t file_size, int sockfd)
 {
     // N- the number of bytes that will be transferred (file_size in network byte order)
-    uint64_t N = (endianness_swap(file_size));
+    uint64_t N = htobe64(file_size);
     int count_int_bytes = NUM_BYTES_64INT;// There are 64/8=8 bytes to send to server
     int count_unwritten_bytes = NUM_BYTES_64INT;// Number of bytes left to write
     int count_written_bytes = 0;// Number of bytes written
@@ -121,7 +118,7 @@ void write_file_to_server(int sockfd, int file_desc)
 
 void read_from_server(int sockfd)
 {
-    uint64_t result;
+    uint64_t result; // C
     int retrun_value;
 
     int count_int_bytes = NUM_BYTES_64INT;// There are 64/8=8 bytes to read from server
@@ -135,28 +132,11 @@ void read_from_server(int sockfd)
         count_read_bytes += retrun_value;
     }
 
-    uint64_t server_count = endianness_swap(result);
+    uint64_t server_count = be64toh(result);
 
     close(sockfd);
 
     printf("# of printable characters: %lu\n", server_count);
-}
-
-/*https://stackoverflow.com/questions/105252/how-do-i-convert-between-big-endian-and-little-endian-values-in-c*/
-uint64_t endianness_swap(uint64_t val)
-{
-    uint64_t a, b, c, d, e, f, g;
-    a = (val & 0xFF00000000000000) >> 56;
-    b = (val & 0xFF000000000000) >> 48;
-    c = (val & 0xFF0000000000) >> 40;
-    d = (val & 0xFF00000000) >> 32;
-    e = (val & 0xFF000000) >> 24;
-    f = (val & 0xFF0000) >> 16;
-    g = (val & 0xFF00) >> 8;
-    val = (val & 0x000000FF) << 56;
-
-    val = val + (g << 48) + (f << 40) + (e << 32) + (d << 24) + (c << 16) + (b << 8) + (a);
-    return val;
 }
 
 void error_occured(int bool, char *error_msg)

@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <signal.h>
+ #include <endian.h>
+#include <stdatomic.h>
 
 #define ARGC 2
 #define QUEUE_SIZE 10
@@ -41,16 +43,13 @@ uint64_t pcc_total[UPPER_B_PRINTABLE - LOWER_B_PRINTABLE + 1];//Will count how m
 int connection_error=0; // TCP errors or unexpected connection close- connection_error=1
 int SIGINT_mood=0;
 int client_procced=0; //0 - no client is being procceed, 1- a client is beeing procceed
-int connfd=-1;// when the server is proccesing a client connfd=accept(), else- connfd=-1 (in case of an error too)
+atomic int connfd=-1;// when the server is proccesing a client connfd=accept(), else- connfd=-1 (in case of an error too)
 
 /* passing a condition of an error in bool- if true it's an error- print it and exit(1)*/
 void error_occured_exit(int bool, char *error_msg);
 
 /* passing a condition of an error in bool- if true it's a TCP error or connection termineted- connection_error=1 */
 void error_occured_not_exit(int bool, char *error_msg1,char *error_msg2);
-
-/* given an uint64_t convert it from Big-Endian to Little-Endian (and vice versa) */
-uint64_t endianness_swap(uint64_t val);
 
 /* while the server in “processing a client”- update SIGINT_mood=1 so when this process ends it will be the last, and prints statistics and exit
 else- print statistics and exit */
@@ -163,7 +162,7 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        N = endianness_swap(result);
+        N = be64toh(result);
 
         // =================================DONE- Get N from client=================================
 
@@ -220,7 +219,7 @@ int main(int argc, char *argv[])
         }
 
         // ============================Write current_count_pc to client=============================
-        C = endianness_swap(current_count_pc);
+        C = htobe64(current_count_pc);
         count_unwritten_bytes = count_int_bytes;
         count_written_bytes = 0;
         
@@ -304,23 +303,6 @@ int is_printable(char c)
 { 
     // (A printable character is a byte b whose value is 32 ≤ b ≤ 126)
     return (c<=UPPER_B_PRINTABLE && c>=LOWER_B_PRINTABLE);
-}
-
-/*https://stackoverflow.com/questions/105252/how-do-i-convert-between-big-endian-and-little-endian-values-in-c*/
-uint64_t endianness_swap(uint64_t val)
-{
-    uint64_t a, b, c, d, e, f, g;
-    a = (val & 0xFF00000000000000) >> 56;
-    b = (val & 0xFF000000000000) >> 48;
-    c = (val & 0xFF0000000000) >> 40;
-    d = (val & 0xFF00000000) >> 32;
-    e = (val & 0xFF000000) >> 24;
-    f = (val & 0xFF0000) >> 16;
-    g = (val & 0xFF00) >> 8;
-    val = (val & 0x000000FF) << 56;
-
-    val = val + (g << 48) + (f << 40) + (e << 32) + (d << 24) + (c << 16) + (b << 8) + (a);
-    return val;
 }
 
 void error_occured_exit(int bool, char *error_msg)
