@@ -38,8 +38,9 @@
 #define WRITE_K_SIZE_ERROR "Server ERROR: client process was killed unexpectedly while writing C to client"
 #define WRITE_TCP_SIZE_ERROR "Server ERROR: TCP error occured while writing C to client"
 
-uint64_t pcc_total[UPPER_B_PRINTABLE - LOWER_B_PRINTABLE + 1];//Will count how many times each printable characterwas observed in all client connections
 
+/*-------------------Declarations-------------------*/
+uint64_t pcc_total[UPPER_B_PRINTABLE - LOWER_B_PRINTABLE + 1];//Will count how many times each printable characterwas observed in all client connections
 int connection_error=0; // TCP errors or unexpected connection close- connection_error=1
 int SIGINT_mood=0;
 int client_procced=0; //0 - no client is being procceed, 1- a client is beeing procceed
@@ -60,6 +61,7 @@ int is_printable(char c);
 
 void print_pcc_total();
 
+/*-------------------Functions-------------------*/
 int main(int argc, char *argv[])
 {
     int return_value;

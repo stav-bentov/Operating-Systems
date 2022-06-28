@@ -23,6 +23,7 @@
 #define WRITE_FILE_TO_SERVER_ERROR "Client ERROR: failed writing file to server"
 #define WRITE_SIZE_TO_SERVER_ERROR "Client ERROR: failed writing file-size to server"
 
+/*-------------------Declarations-------------------*/
 /* Passing a condition of an error in bool- if true it's an error- print it and exit(1)*/
 void error_occured(int bool, char *error_msg);
 
@@ -35,6 +36,7 @@ void write_size_to_server(uint64_t file_size, int sockfd);
 /* Read C that was sent from server*/
 void read_from_server(int sockfd);
 
+/*-------------------Functions-------------------*/
 int main(int argc, char *argv[])
 {
     int return_value;

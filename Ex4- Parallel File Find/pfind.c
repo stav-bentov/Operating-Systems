@@ -127,6 +127,7 @@ int anyOnhold=0;
 // Number of threads waiting for K threads (that were sleeping because of empty queue) to finish their run.
 int numberOfThreadsHolding=0;
 
+/*-------------------Functions-------------------*/
 int main(int argc, char *argv[])
 {
     int return_value;
