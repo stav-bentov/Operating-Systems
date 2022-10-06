@@ -62,7 +62,7 @@ int finalize(void);
 int signal_IGN(int signal)
 {
     struct sigaction sig;
-    sig.sa_handler =SIG_IGN; // ignore signal
+    sig.sa_handler =SIG_IGN; // Ignore signal
     if(sigaction(signal, &sig, NULL) == -1)
     {
         perror(SIGNAL_ERROR);
@@ -85,13 +85,13 @@ int signal_DFL(int signal)
 
 int prepare(void)
 {
-    // the child process entry is deleted from the process table when ignoring SIGCHLD- zombie isn't created
+    // The child process entry is deleted from the process table when ignoring SIGCHLD- zombie isn't created
     if(signal_IGN(SIGCHLD)==-1)
     { //Error
         return -1;
     }
 
-    // after prepare the parent won't terminate upon SIGINT (Handling of SIGINT 2)
+    // After prepare the parent won't terminate upon SIGINT (Handling of SIGINT 2)
     if(signal_IGN(SIGINT)==-1)
     { //Error
         return -1;
@@ -181,9 +181,11 @@ int background_command(int count, char **arglist)
 
 int piping_command(int index, char **arglist)
 {
-    // remove special symbol from arglist
+    // Remove special symbol from arglist
     arglist[index]=NULL;
 
+    /* pipefd[0]= read end
+       pipefd[1]= write end*/
     int pipefd[2];
     if(pipe(pipefd)==-1)
     { // Failed piping
@@ -214,12 +216,12 @@ int piping_command(int index, char **arglist)
 
         // Close read end
         close(pipefd[READ]);
-        // replace STDOUT with new file descriptor 
+        // Replace STDOUT with new file descriptor 
         dup2(pipefd[WRITE],STDOUT_FILENO);
-        // we used dup2- now we dont need it
+        // We used dup2- now we dont need it
         close(pipefd[WRITE]);
 
-        // execute process
+        // Execute process
         if (execvp(arglist[0],arglist) == -1)
         {
             // Error handling 4-5
@@ -227,7 +229,7 @@ int piping_command(int index, char **arglist)
             exit(1);
         }
     }
-    // (else) Parent process- creates a new child process that will read from the pipe
+    // (Else) Parent process- creates a new child process that will read from the pipe
     pid_t pid2 = fork(); // (child) process 2 reading from (child) process 1
     if (pid2 == -1)
     { // Failed forking- error in parent process - so print error and return 0
@@ -250,12 +252,12 @@ int piping_command(int index, char **arglist)
 
         // Close read end
         close(pipefd[WRITE]);
-        // replace STDIN with new file descriptor 
+        // Replace STDIN with new file descriptor 
         dup2(pipefd[READ],STDIN_FILENO);
-        // we used dup2- now we dont need it
+        // We used dup2- now we dont need it
         close(pipefd[READ]);
 
-        // execute process
+        // Execute process
         if (execvp(arglist[index+1],&arglist[index+1]) == -1)
         {
             // Error handling 4-5
@@ -282,10 +284,8 @@ int piping_command(int index, char **arglist)
 
 int redirecting_command(int index, char **arglist)
 {
-    // remove spacial symbol from arglist
+    // Remove spacial symbol from arglist
     arglist[index]=NULL;
-
-    //int fileDesc=open(arglist[index+1] ,O_WRONLY | O_CREAT | O_APPEND | O_TRUNC |);
 
     /* open the file: O_CREAT = if it doesnt exist then creates it,
         O_APPEND= allows to append the output to the file,
@@ -313,7 +313,7 @@ int redirecting_command(int index, char **arglist)
             exit(1);
         }
 
-        // replace STDOUT with new file descriptor 
+        // Replace STDOUT with new file descriptor 
         if(dup2(fileDesc,STDOUT_FILENO)==-1)
         {// Error handling 4-5, duplicate doen't sucseed 
             perror(DUP_ERROR);
@@ -322,7 +322,7 @@ int redirecting_command(int index, char **arglist)
 
         close(fileDesc);
 
-        // execute process
+        // Execute process
         if (execvp(arglist[0],arglist) == -1)
         {
             // Error handling 4-5
@@ -350,7 +350,7 @@ int process_arglist(int count, char **arglist)
     int i;
     int breakFor = 0;
 
-    // search for &,>>,| (or none of them)
+    // Search for &,>>,| (or none of them)
     for (i=0; i < count; i++)
     {
         // arg[i]=& (or) >> (or) |

@@ -27,7 +27,6 @@ int main(int argc, char *argv[])
         msg=argv[3];
 
         msg_file=open(msg_path,O_RDWR);
-        /*check*/
         if(msg_file<0)
         {
             perror(OPEN_FILE_ERROR);

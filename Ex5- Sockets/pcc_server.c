@@ -93,6 +93,7 @@ int main(int argc, char *argv[])
     // ===========Listen to incoming TCP connections==========
     struct sockaddr_in server_address;
 
+    // SOCK_STREAM -for TCP
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     error_occured_exit(sockfd == -1, SOCKET_ERROR);
 
@@ -111,7 +112,6 @@ int main(int argc, char *argv[])
 
     return_value = listen(sockfd, QUEUE_SIZE);
     error_occured_exit(return_value == -1, LISTEN_ERROR);
-
 
     // ===================Connection accepted===================
     while (1)
@@ -228,7 +228,6 @@ int main(int argc, char *argv[])
         while (count_written_bytes<count_int_bytes && !connection_error)
         {
             // each byte is starting from (&N+count_sent_bytes)
-            // TODO check if count_unsent_bytes correct
             return_value = write(connfd, &C + count_written_bytes, count_unwritten_bytes);
             
             if(return_value==0 && count_written_bytes!=count_int_bytes)
@@ -319,7 +318,7 @@ void error_occured_exit(int bool, char *error_msg)
 void error_occured_not_exit(int bool, char *error_msg1,char *error_msg2)
 {
     if (bool)
-    { // error occured check which type
+    { // Error occured check which type
         if(errno==ETIMEDOUT || errno==ECONNRESET || errno== EPIPE)
         { // TCP errors
             fprintf(stderr, "%s: %s", error_msg1, strerror(errno));

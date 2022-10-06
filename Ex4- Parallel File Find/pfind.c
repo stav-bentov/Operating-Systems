@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, MAIN_ERROR_MALLOC);
         exit(ERROR);
     }
-    // check if its return ERROR on NULL in argv[1]
+    // Check if its return ERROR on NULL in argv[1]
     strcpy(head_dir,argv[1]);
 
     /* Check if the directory specified in argv[1] can be searched */
@@ -211,16 +211,16 @@ int main(int argc, char *argv[])
     mtx_lock(&main_mutex);
     while (numOfRunningThreads < numOfThreads)
     {
-        /* waiting for threadCreated signal*/
+        /* Waiting for threadCreated signal*/
         cnd_wait(&threadCreated, &main_mutex);
     }
 
     mtx_unlock(&main_mutex);
 
-    // signal all threads that all threads were created
+    // Signal all threads that all threads were created
     cnd_broadcast(&allThreadsCreated);
 
-    // --- Wait for threads to finish ------------------
+    // ------------------ Wait for threads to finish ------------------
     for (long t = 0; t < numOfThreads; ++t)
     {
         return_value = thrd_join(thread_ids[t], NULL);
@@ -248,7 +248,7 @@ int thread_func()
 
     while(1)
     {
-        /* set default variables 
+        /* Set default variables 
         qWasEmpty-if thread got in and waited because queue was empty,
         isKwaiting- if thread got in when there is a thread that waits- it's part of K waiting threads,
         numThreadToWait- if thread got in when there is a thread that waits
@@ -268,36 +268,36 @@ int thread_func()
         So while K threads are in progress- every other thread needs to wait*/ 
         while (isWaitingNowRunning)
         {
-            // update numberOfThreadsHolding (only once for each diffrent thread)
+            // Update numberOfThreadsHolding (only once for each diffrent thread)
             if(BoolWaitedOutside==0)
             {
                 BoolWaitedOutside=1;
                 numberOfThreadsHolding++;
             }
 
-            // current thread entered but all other threads are waiting for K threads to finish and they are waiting for queue to be non-empty.
+            // Current thread entered but all other threads are waiting for K threads to finish and they are waiting for queue to be non-empty.
             checkHoldingExit();
-            // wait till K threads done their work
+            // Wait till K threads done their work
             cnd_wait(&updateWaiting,&main_mutex);
             checkHoldingExit();
         }
-        // if thread waited for K threads to be done- need to update numberOfThreadsHolding
+        // If thread waited for K threads to be done- need to update numberOfThreadsHolding
         if(BoolWaitedOutside)
         {
             numberOfThreadsHolding--;
         }
-        // take care of K waiting- thread got in to if there is a thread waiting for queue to become non-empty
+        // Take care of K waiting- thread got in to if there is a thread waiting for queue to become non-empty
         if(numOfWaitingThreads>0)
         {
-            // current thread is Waiting thread due to queue is empty
+            // Current thread is Waiting thread due to queue is empty
             isKwaiting=1;
-            numOfWaitingThreads++; // current thread is also waiting
-            numThreadToWait=counterWaiting; // current thread needs to wake up when numThreadToWait=numOfthreadDoneWaiting
+            numOfWaitingThreads++; // Current thread is also waiting
+            numThreadToWait=counterWaiting; // Current thread needs to wake up when numThreadToWait=numOfthreadDoneWaiting
             counterWaiting++;
 
             checkKWaitingExit();
             
-            // wake up thread at it's time
+            // Wake up thread at it's time
             while(numThreadToWait<numOfthreadDoneWaiting)
             {
                 checkKWaitingExit();
@@ -305,14 +305,14 @@ int thread_func()
                 checkKWaitingExit();
             }
         }
-        // no thread (beside threads in holding) is waiting at the moment so numOfWaitingThreads==0
+        // No thread (beside threads in holding) is waiting at the moment so numOfWaitingThreads==0
         else
         {
-            // if thread got in when queue was empty
+            // If thread got in when queue was empty
             if(dir_queue->first==NULL)
             {
-                qWasEmpty=1;// thread waiting because queue is empty
-                anyOnhold=1;// first thread out of K in waiting so there is at least one thread on hold
+                qWasEmpty=1;// Thread waiting because queue is empty
+                anyOnhold=1;// First thread out of K in waiting so there is at least one thread on hold
                 numOfWaitingThreads++;
                 numThreadToWait=counterWaiting;
                 counterWaiting++;
@@ -322,13 +322,13 @@ int thread_func()
 
         // If thread was one of the K waiting
         if(qWasEmpty || isKwaiting)
-        { // update number of waiting threads
+        { // Update number of waiting threads
             numOfWaitingThreads--;
             numOfthreadDoneWaiting++;
 
             // Done ALL k threads- cuurent thread is last k thread
             if(numOfWaitingThreads==0)
-            { // last thread done waiting
+            { // Last thread done waiting
                 counterWaiting=0;
                 isWaitingNowRunning=0;
                 anyOnhold=0;
@@ -336,7 +336,7 @@ int thread_func()
             }
         }
         
-        // wake up K waiting
+        // Wake up K waiting
         cnd_broadcast(&updateWaiting);
         mtx_unlock(&main_mutex);
 
@@ -376,7 +376,7 @@ void thread_search(char *head_path)
             KillThread();
         }
 
-        //build full path
+        //Build full path
         strcpy(entry_path, head_path);
         strcat(entry_path, "/");
         strcat(entry_path, entry->d_name);
@@ -397,12 +397,12 @@ void thread_search(char *head_path)
             }
             else
             {
-                // check if dir is searchable
+                // Check if dir is searchable
                 return_value=isSearchble(entry_path);
                 if(return_value!=SEARCHBLE_INT)
                 { // Error or permission denied
                     if(return_value==ERROR_INT)
-                    {// in case of an error in opendir
+                    {// In case of an error in opendir
                         errorThread=1;
                         fprintf(stderr,THREAD_ERROR_OPENDIR);
                         KillThread();
@@ -413,7 +413,7 @@ void thread_search(char *head_path)
                         continue;
                     }
                 }
-                // insert new directory path
+                // Insert new directory path
                 return_value = enqueueDir(entry_path);
                 if (return_value==ERROR)
                 {
@@ -424,7 +424,7 @@ void thread_search(char *head_path)
             }
         } 
         else 
-        {// entry is a file- check the term
+        {// Entry is a file- check the term
             check_term = strstr(entry->d_name, term);
             if (check_term != NULL)
             {
@@ -443,11 +443,11 @@ int isSearchble(char* dir)
     if(open_dir==NULL)
     { 
         if(errno!=EACCES)
-        {// in case of an error in opendir
+        {// In case of an error in opendir
             return ERROR_INT;
         }
         else
-        {// can't happend here
+        {// Permission denied
             return PERMISSION_INT;
         }
     }
@@ -457,13 +457,13 @@ int isSearchble(char* dir)
 
 void waitForAll()
 {
-    // waits untill all threads are created. update main that a thread was creating by update num of created threads and send a signal
+    // Waits untill all threads are created. update main that a thread was creating by update num of created threads and send a signal
     mtx_lock(&main_mutex);
-    // this thread in now running
+    // This thread in now running
     numOfRunningThreads++;
-    // this thren has been created- update main
+    // This thread has been created- update main
     cnd_signal(&threadCreated);
-    // wait for all thread to be created
+    // Wait for all thread to be created
     cnd_wait(&allThreadsCreated, &main_mutex);
     mtx_unlock(&main_mutex);
 }
@@ -475,7 +475,7 @@ void checkHoldingExit()
         if(numOfWaitingThreads+numberOfThreadsHolding==numOfRunningThreads)
         {
             numOfRunningThreads--;
-            // current thread is a in "numberOfThreadsHolding" count
+            // Current thread is in "numberOfThreadsHolding" count
             numberOfThreadsHolding--;
             mtx_unlock(&main_mutex);
             cnd_broadcast(&updateWaiting);
@@ -591,7 +591,7 @@ int enqueueDir(char* dir_path)
 {
     DIR_element *dir_obj;
     dir_obj = (DIR_element*)malloc(sizeof(DIR_element));
-    // malloc failed
+    // Malloc failed
     if (dir_obj == NULL)
     {
         return ERROR;
@@ -599,8 +599,8 @@ int enqueueDir(char* dir_path)
     dir_obj->dir_path=dir_path;
     dir_obj->next=NULL;
     mtx_lock(&main_mutex);
-    // check if can be replaced with one of them!!!!!!!!!!!!!!!
-    /* if queue is empty- need to set up first */
+    
+    /* If queue is empty- need to set up first */
     if (dir_queue->first == NULL)
     {
         dir_queue->first = dir_obj;
@@ -608,7 +608,7 @@ int enqueueDir(char* dir_path)
         dir_queue->size = 1;
     }
     else
-    { // queue isn't empty
+    { // Queue isn't empty
         if(dir_queue->size==1)
         {
             dir_queue->first->next=dir_obj;
